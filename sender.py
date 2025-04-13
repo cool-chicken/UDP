@@ -1,17 +1,21 @@
 #coding:utf-8
-import pygame
 import cv2 as cv
 import time
 import threading
 import socket
 
-pygame.init()
-
 # 配置参数
 TARGET_IP = '192.168.0.196'
 TARGET_PORT = 9999
 CHUNK_SIZE = 1024  # 分块大小
-FRAME_WIDTH, FRAME_HEIGHT = 160, 120  # 初始分辨率
+
+# 分辨率档位
+RES_LEVELS = [
+    (320, 240), # 高
+    (240,180),  # 中
+    (160,129),  # 低
+]
+current_res_index = 2 # 初始分辨率档位索引
 
 # 分包函数
 def send_frame_in_chunks(sock, frame_data, addr, frame_id):
@@ -24,10 +28,42 @@ def send_frame_in_chunks(sock, frame_data, addr, frame_id):
         header = frame_id.to_bytes(2, 'big') + bytes([i]) + bytes([total_chunks])
         sock.sendto(header + chunk_data, addr)
 
+# 测量RTT
+def measure_rtt(target_ip, target_port, timeout=0.5):
+    socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    socket.settimeout(timeout)
+    probe = b'ping'
+    start = time.time()
+    try:
+        socket.sendto(probe, (target_ip, target_port))
+        socket.recvfrom(1024)  # 等待接收响应
+        end = time.time()
+        return (end - start) * 1000  # 返回RTT，单位为毫秒
+    except socket.timeout:
+        return float('inf')
+    finally:
+        socket.close()
+# 动态调整分辨率
+def adjust_resolution_loop():
+    global current_res_index
+    while True:
+        rtt = measure_rtt(TARGET_IP, TARGET_PORT)
+        print(f"[RTT]{rtt:.2f} ms")
+        if rtt < 100:
+            current_res_index = 0
+        elif rtt < 300:
+            current_res_index = 1
+        else:
+            current_res_index = 2
+        time.sleep(2)  # 每2秒测量一次RTT
+
 def main():
     print("Sending started")
     cap = cv.VideoCapture(0)
     frame_id = 0  # 帧编号
+
+    # 启动RTT检测线程
+    threading.Thread(target=adjust_resolution_loop, daemon=True).start()
 
     while True:
         ret, frame = cap.read()
@@ -35,15 +71,14 @@ def main():
             continue
         frame = cv.flip(frame, -1)
 
-        # **TODO: 动态调整分辨率（根据网络延迟等因素，调整帧率、分辨率等）**
-        # [目前设定为固定分辨率，动态调整分辨率的代码可以根据网络质量或延迟进行调整]
-        frame = cv.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT))
+        # 动态调整分辨率
+        width, height = RES_LEVELS[current_res_index]
+        frame = cv.resize(frame, (width, height))
 
-        # 编码成字符串
-        cv.imwrite("frame.jpg", frame)
-        img = pygame.image.load("frame.jpg")
-        data = pygame.image.tostring(img, "RGB")
-
+        # 高效编码成JPEG字节流
+        _,encoded_img = cv.imencode('.jpg', frame, [int(cv.IMWRITE_JPEG_QUALITY), 80])
+        data = encoded_img.tobytes()
+        
         # 启动 UDP 发送线程
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         t = threading.Thread(target=send_frame_in_chunks, args=(sock, data, (TARGET_IP, TARGET_PORT), frame_id))

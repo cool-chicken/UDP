@@ -1,31 +1,19 @@
-# what a nice day
-# go go go 出发喽
-# 为什么不下载cv2
-# cv2是啥        一个库 调用相机的
-#效率
-#俺来了
-
-
-
-
-
-
-
 #coding=utf-8
 import socket
 import pygame
 import time
 from collections import defaultdict
+import numpy as np
 
 # 初始化 Pygame 界面
 pygame.init()
 pygame.display.set_caption('UDP 视频接收')
 
-WIDTH, HEIGHT = 300, 200
+WIDTH, HEIGHT = 320, 240
 display = pygame.display.set_mode((WIDTH, HEIGHT))
 WHITE, BLACK = (255,255,255), (0,0,0)
 font = pygame.font.Font('C:/Windows/Fonts/comici.ttf', 20)
-textRect = font.render('FPS', True, BLACK, WHITE).get_rect(center=(250, 10))
+textRect = font.render('FPS', True, BLACK, WHITE).get_rect(center=(270, 10))
 
 # UDP 接收设置
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -52,6 +40,10 @@ while running:
     try:
         # 接收数据包，获取帧信息
         data, addr = s.recvfrom(1024 + 4)
+        if data == b'ping':
+            s.sendto(b'pong', addr)
+            continue
+
         frame_id = int.from_bytes(data[0:2], 'big')
         chunk_id = data[2]
         total_chunks = data[3]
