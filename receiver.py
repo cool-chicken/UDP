@@ -38,7 +38,7 @@ textRect = font.render('FPS', True, BLACK, WHITE).get_rect(center=(270, 10))
 
 # UDP 接收设置
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind(('10.198.33.64', 9999))
+s.bind(('10.198.199.117', 9999))
 s.settimeout(1)
 
 # 帧缓存和计时器

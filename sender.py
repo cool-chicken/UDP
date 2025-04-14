@@ -5,7 +5,7 @@ import threading
 import socket
 
 # 配置参数
-TARGET_IP = '10.198.33.64'
+TARGET_IP = '192.168.199.111'
 TARGET_PORT = 9999
 CHUNK_SIZE = 1024  # 分块大小
 
