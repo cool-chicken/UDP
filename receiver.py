@@ -1,3 +1,18 @@
+<<<<<<< HEAD
+=======
+# what a nice day
+# go go go 出发喽
+# 为什么不下载cv2
+# cv2是啥        一个库 调用相机的
+#效率
+#俺来了
+
+
+
+
+
+
+>>>>>>> 324b254 (lxy)
 #coding=utf-8
 import socket
 import pygame
@@ -88,6 +103,7 @@ while running:
 
         # 如果当前帧的数据全部接收完，进行拼接
         if len(frame_buffer[frame_id]) == total_chunks:
+<<<<<<< HEAD
             assembled = assemble_frame(frame_buffer[frame_id], total_chunks)
             if assembled:
                 # 解码 JPEG 数据
@@ -116,6 +132,15 @@ while running:
                     print(f"警告：帧 {frame_id} 不存在，无法删除")
             else:
                 print(f"帧 {frame_id} 丢失，无法恢复")
+=======
+            chunks = frame_buffer.pop(frame_id)  # 取出当前帧的全部块
+            assembled = assemble_frame(chunks, total_chunks)
+            if assembled and len(assembled) == 160 * 120 * 3:  # 防止数据不完整
+                img = pygame.image.frombuffer(assembled, (160, 120), "RGB")
+                last_complete_frame = img
+
+
+>>>>>>> 324b254 (lxy)
     except socket.timeout:
         pass
 

@@ -68,6 +68,7 @@ def adjust_resolution_loop():
             current_res_index = 2
         time.sleep(2)  # 每2秒测量一次RTT
 
+
 def main():
     print("Sending started")
     cap = cv.VideoCapture(0)
