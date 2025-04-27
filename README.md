@@ -1,25 +1,38 @@
-# UDP - 实时视频流传输
+# <span style="color: rgb(252, 146, 75); font-family: 'Leckerli One', cursive;">UDP - 实时视频流传输</span>
 
-### 任务：实现基于UDP的实时视频传输系统
-
-### 发送端：
-- 从摄像头捕获帧，分块编码后通过UDP发送
-
-### 接收端：
-- 重组帧并显示，支持丢包时的错误隐藏（如重复上一帧）
-
-### 优化方向：
-- 动态调整码率（根据网络延迟增减分辨率）
-- 前向纠错（FEC）减少重传延迟
-- 实现多IP视频传输，通过IP自动创建接收进程
+### 作者
+[Ruihan Wu](https://cool-chicken.github.io), [Yige Han](https://github.com/AmieeLove), [Xiaoying Ly](https://github.com/Laixyyy), [Kelin Zou](https://github.com/Hextoca)
 
 ---
 
-### 发送端流程图
-<img src="sender.png" alt="发送端流程图" width="600">
+### 任务
+实现基于 UDP 的实时视频传输系统：
 
-### 接收端流程图
-<img src="receiver.png" alt="接收端流程图" width="600">
+#### 发送端：
+- 从摄像头捕获帧，分块编码后通过 UDP 发送。
+
+#### 接收端：
+- 重组帧并显示，支持丢包时的错误隐藏（如重复上一帧）。
+
+#### 优化方向：
+1. 动态调整码率（根据网络延迟增减分辨率）。
+2. 前向纠错（FEC）减少重传延迟。
+3. 实现多 IP 视频传输，通过 IP 自动创建接收进程。
+
+---
+
+### 流程图
+
+<div style="display: flex; justify-content: center; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+    <div>
+        <h3 style="text-align: center; color: rgb(252, 146, 75);">发送端流程图</h3>
+        <img src="sender.png" alt="发送端流程图" width="300">
+    </div>
+    <div>
+        <h3 style="text-align: center; color: rgb(252, 146, 75);">接收端流程图</h3>
+        <img src="receiver.png" alt="接收端流程图" width="300">
+    </div>
+</div>
 
 ---
 
@@ -38,7 +51,7 @@ python receiver.py
 ```
 ### 3. 运行效果
 在设置好收发端后我们可以看到如下效果
- <video src="demo.mov" controls autoplay loop width="800"></video>
+ <video src="demo.png" controls autoplay loop width="800"></video>
 可以发现，视频延迟度低，且画面流畅，适合实时应用。
 
 接收端关闭接收窗口`q`，或者`esc`退出窗口，当所有窗口均关闭时候接收方主进程结束
