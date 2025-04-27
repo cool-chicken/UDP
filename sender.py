@@ -3,10 +3,11 @@ import cv2 as cv
 import time
 import threading
 import socket
+import os
 
 # 配置参数
-TARGET_IP = '192.168.199.111'
-TARGET_PORT = 9999
+TARGET_IP = '10.198.172.57'  # 这里需要填写接收端IP地址
+TARGET_PORT = 12345
 CHUNK_SIZE = 1024  # 分块大小
 
 # 分辨率档位
@@ -40,7 +41,7 @@ def send_frame_in_chunks(sock, frame_data, addr, frame_id):
     sock.sendto(parity_header + parity_chunk, addr)
 
 # 测量RTT
-def measure_rtt(target_ip, target_port, timeout=0.5):
+def measure_rtt(target_ip, target_port, timeout=0.5):   #timeout是0.5s会不会太短
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # 避免变量名冲突
     udp_socket.settimeout(timeout)
     probe = b'ping'
@@ -57,16 +58,30 @@ def measure_rtt(target_ip, target_port, timeout=0.5):
 # 动态调整分辨率
 def adjust_resolution_loop():
     global current_res_index
+    timeout_count = 0  # 超时计数器
+
     while True:
         rtt = measure_rtt(TARGET_IP, TARGET_PORT)
-        print(f"[RTT]{rtt:.2f} ms")
+        print(f"[RTT] {rtt:.2f} ms")
+
+        if rtt == float('inf'):  # 检测到超时
+            timeout_count += 1
+            print(f"[警告] RTT 超时次数：{timeout_count}")
+            if timeout_count >= 5:  # 连续超时 5 次
+                print("[错误] 连续超时 5 次，发送端即将退出...")
+                os._exit(1)# 退出程序
+        else:
+            timeout_count = 0  # 如果 RTT 正常，重置计数器
+
+        # 根据 RTT 动态调整分辨率
         if rtt < 100:
             current_res_index = 0
         elif rtt < 300:
             current_res_index = 1
         else:
             current_res_index = 2
-        time.sleep(2)  # 每2秒测量一次RTT
+
+        time.sleep(2)  # 每 2 秒测量一次 RTT
 
 
 def main():
@@ -85,14 +100,14 @@ def main():
         ret, frame = cap.read()
         if not ret:
             continue
-        frame = cv.flip(frame, -1)
+        # frame = cv.flip(frame, -1)
 
         # 动态调整分辨率
         width, height = RES_LEVELS[current_res_index]
         frame = cv.resize(frame, (width, height))
 
         # 高效编码成JPEG字节流
-        _,encoded_img = cv.imencode('.jpg', frame, [int(cv.IMWRITE_JPEG_QUALITY), 80])
+        _,encoded_img = cv.imencode('.jpg', frame, [int(cv.IMWRITE_JPEG_QUALITY), 98])
         data = encoded_img.tobytes()
         
         # 启动 UDP 发送线程

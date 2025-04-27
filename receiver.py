@@ -1,169 +1,180 @@
-<<<<<<< HEAD
-=======
-# what a nice day
-# go go go 出发喽
-# 为什么不下载cv2
-# cv2是啥        一个库 调用相机的
-#效率
-#俺来了
-
-
-
-
-
-
->>>>>>> 324b254 (lxy)
-#coding=utf-8
-import socket
-import pygame
 import time
+from multiprocessing import Process, Queue, set_start_method
+import socket
+import cv2 as cv
 from collections import defaultdict
 import numpy as np
-import cv2 as cv  # 添加 OpenCV 以解码 JPEG 数据
 
-CHUNK_SIZE = 1024  # 确保两端的值一致
-        
-
-
-# 初始化 Pygame 界面
-pygame.init()
-pygame.display.set_caption('UDP 视频接收')
-
+CHUNK_SIZE = 1024
 WIDTH, HEIGHT = 320, 240
-display = pygame.display.set_mode((WIDTH, HEIGHT))
-WHITE, BLACK = (255,255,255), (0,0,0)
-# font = pygame.font.Font('C:/Windows/Fonts/comici.ttf', 20)
-font = pygame.font.Font('freesansbold.ttf', 32)
-textRect = font.render('FPS', True, BLACK, WHITE).get_rect(center=(270, 10))
+PAUSE_DURATION = 10  # 窗口关闭后暂停接收的时间（秒）
 
-# UDP 接收设置
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind(('10.198.199.117', 9999))
-s.settimeout(1)
+try:
+    set_start_method('spawn')
+except RuntimeError:
+    pass
 
-# 帧缓存和计时器
-frame_buffer = defaultdict(dict)
-last_complete_frame = None
-frame_rate = 0
-start = time.perf_counter()
-
-# **TODO: 重新组装帧**
-# def assemble_frame(chunks_dict, total_chunks):
-#     """
-#     用于从分块数据中重新组装帧。确保所有块都接收完整才进行拼接。
-#     如果缺失块或顺序不对，这里可以返回 None，表示帧不完整。
-#     """
-#     frame_data = b''.join(chunks_dict[i] for i in range(total_chunks) if i in chunks_dict)
-#     return frame_data if len(chunks_dict) == total_chunks else None
 
 def assemble_frame(chunks_dict, total_chunks):
-    """
-    从分块数据中重新组装帧。如果有丢失的块，尝试使用奇偶校验块恢复。
-    """
-    missing_chunks = [i for i in range(total_chunks) if i not in chunks_dict]
-
-    # 如果只有一个块丢失，尝试恢复
-    if len(missing_chunks) == 1:
-        missing_chunk_id = missing_chunks[0]
-        recovered_chunk = bytearray(CHUNK_SIZE)
-        for i in range(total_chunks):
-            if i != missing_chunk_id:
-                chunk_data = chunks_dict[i]
-                for j in range(len(chunk_data)):
-                    recovered_chunk[j] ^= chunk_data[j]
-        chunks_dict[missing_chunk_id] = bytes(recovered_chunk)
-
-    # 如果仍有丢失块，返回 None
-    if len(chunks_dict) < total_chunks:
+    """拼接完整帧，支持一块丢失恢复（XOR校验）"""
+    missing = [i for i in range(total_chunks) if i not in chunks_dict]
+    if len(missing) == 1:
+        missing_id = missing[0]
+        recovered = bytearray(CHUNK_SIZE)
+        try:
+            for i in range(total_chunks):
+                if i != missing_id:
+                    chunk = chunks_dict[i]
+                    for j in range(len(chunk)):
+                        recovered[j] ^= chunk[j]
+            chunks_dict[missing_id] = bytes(recovered)
+        except Exception as e:
+            print(f"[恢复失败] {e}")
+            return None
+    elif len(missing) > 1:
         return None
 
-    # 拼接完整帧
-    frame_data = b''.join(chunks_dict[i] for i in range(total_chunks))
-    return frame_data
-
-running = True
-while running:
     try:
-        # 接收数据包，获取帧信息
-        data, addr = s.recvfrom(1024 + 4)
-        if data == b'ping':
-            s.sendto(b'pong', addr)
+        return b''.join(chunks_dict[i] for i in range(total_chunks))
+    except:
+        return None
+
+
+def per_ip_process(ip, q: Queue, exit_flag: Queue):
+    """每个 IP 创建一个 OpenCV 窗口显示视频"""
+    print(f"[✓] 进程启动：{ip}")
+    frame_buffer = defaultdict(dict)
+    last_frame_time = time.time()
+    fps = 0
+
+    window_name = f'视频源 {ip}'
+    cv.namedWindow(window_name, cv.WINDOW_NORMAL)  # 叉叉关闭窗口
+
+    while True:
+        try:
+            data = q.get(timeout=0.02)
+            if data == b'__exit__':
+                print(f"[!] 关闭窗口 {ip}")
+                break
+
+            frame_id = int.from_bytes(data[0:2], 'big')
+            chunk_id = data[2]
+            total_chunks = data[3]
+            chunk_data = data[4:]
+
+            frame_buffer[frame_id][chunk_id] = chunk_data
+
+            if len(frame_buffer[frame_id]) == total_chunks:
+                raw = assemble_frame(frame_buffer[frame_id], total_chunks)
+                frame_buffer.pop(frame_id, None)
+
+                if raw:
+                    img = cv.imdecode(np.frombuffer(raw, np.uint8), cv.IMREAD_COLOR)
+                    if img is None:
+                        print(f"[×] 解码失败 frame {frame_id}")
+                        continue
+                    if img.shape[:2] != (HEIGHT, WIDTH):
+                        img = cv.resize(img, (WIDTH, HEIGHT))
+
+                    # FPS 计算
+                    now = time.time()
+                    fps = 1.0 / (now - last_frame_time)
+                    last_frame_time = now
+                    cv.putText(img, f"FPS: {fps:.1f}", (10, 20), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+                    # 显示窗口
+                    cv.imshow(window_name, img)
+
+                    key = cv.waitKey(1) & 0xFF
+                    window_status = cv.getWindowProperty(window_name, cv.WND_PROP_VISIBLE)
+
+                    # 检测是否需要退出
+                    if key == ord('q') or key == 27 or window_status < 1:
+                        print(f"[×] {ip} 窗口关闭（按键或点击×）")
+                        exit_flag.put(ip)  # 向主进程发送关闭信号
+                        cv.destroyWindow(window_name)  # 销毁窗口
+                        break
+
+
+                    if cv.getWindowProperty(window_name, cv.WND_PROP_VISIBLE) < 1:
+                        print(f"[×] {ip} 窗口已关闭")
+                        exit_flag.put(ip)  # 向主进程发送关闭信号
+                        cv.destroyWindow(window_name)  # 销毁窗口
+                        break
+
+        except Exception:
             continue
 
-        frame_id = int.from_bytes(data[0:2], 'big')
-        chunk_id = data[2]
-        total_chunks = data[3]
-        chunk_data = data[4:]
+    cv.destroyAllWindows()
 
-        # 保存数据块到缓存中
-        frame_buffer[frame_id][chunk_id] = chunk_data
 
-        # **TODO: 拼接完整帧**
-        # 如果当前帧的数据全部接收完，进行拼接
+def dispatch_thread():
+    """主进程负责接收 UDP 数据并分发到子进程队列"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind(('0.0.0.0', 12345))
+    s.settimeout(1)
 
-        # 如果当前帧的数据全部接收完，进行拼接
-        if len(frame_buffer[frame_id]) == total_chunks:
-<<<<<<< HEAD
-            assembled = assemble_frame(frame_buffer[frame_id], total_chunks)
-            if assembled:
-                # 解码 JPEG 数据
-                decoded_frame = cv.imdecode(np.frombuffer(assembled, np.uint8), cv.IMREAD_COLOR)
-                if decoded_frame is None:
-                    print(f"帧 {frame_id} 解码失败")
+    ip_queues = {}
+    ip_processes = {}
+    exit_flag = Queue()
+    paused_ips = {}  # 记录暂停的 IP 和恢复时间
+
+    print("😆😆😆接收器启动，等待客户端发送视频...") #😆😆😆双进程启动！！！
+
+    try:
+        while True:
+            try:
+                data, addr = s.recvfrom(CHUNK_SIZE + 4)
+                ip = addr[0]
+
+                # 检查该 IP 是否在暂停列表中
+                if ip in paused_ips:
+                    if time.time() < paused_ips[ip]:
+                        continue  # 跳过该 IP 的数据包
+                    else:
+                        del paused_ips[ip]  # 移除暂停状态
+
+                if data == b'ping':
+                    s.sendto(b'pong', addr)
                     continue
-        
-                # 检查解码后的分辨率是否匹配
-                if decoded_frame.shape[:2] != (HEIGHT, WIDTH):
-                    print(f"帧 {frame_id} 分辨率不匹配，期望 {(HEIGHT, WIDTH)}，实际 {decoded_frame.shape[:2]}")
-                    decoded_frame = cv.resize(decoded_frame, (WIDTH, HEIGHT))  # 调整到期望分辨率
-        
-                # 转换为 RGB 格式
-                decoded_frame = cv.cvtColor(decoded_frame, cv.COLOR_BGR2RGB)
-        
-                # 转换为 Pygame 图像
-                img = pygame.image.frombuffer(decoded_frame.tobytes(), (WIDTH, HEIGHT), "RGB")
-                last_complete_frame = img
-        
-                # 删除已处理的帧缓存
-                if frame_id in frame_buffer:
-                    frame_buffer.pop(frame_id)
-                    print(f"帧 {frame_id} 已成功删除")
-                else:
-                    print(f"警告：帧 {frame_id} 不存在，无法删除")
-            else:
-                print(f"帧 {frame_id} 丢失，无法恢复")
-=======
-            chunks = frame_buffer.pop(frame_id)  # 取出当前帧的全部块
-            assembled = assemble_frame(chunks, total_chunks)
-            if assembled and len(assembled) == 160 * 120 * 3:  # 防止数据不完整
-                img = pygame.image.frombuffer(assembled, (160, 120), "RGB")
-                last_complete_frame = img
 
+                if ip not in ip_queues:
+                    print(f"[+] 新客户端接入：{ip}")
+                    q = Queue()
+                    p = Process(target=per_ip_process, args=(ip, q, exit_flag))
+                    p.start()
+                    ip_queues[ip] = q
+                    ip_processes[ip] = p
 
->>>>>>> 324b254 (lxy)
-    except socket.timeout:
-        pass
+                ip_queues[ip].put(data)
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+            except socket.timeout:
+                continue
+            except KeyboardInterrupt:
+                print("[!] 主线程中断，清理资源")
+                break
+            except Exception as e:
+                print(f"[错误] {e}")
 
-    display.fill(WHITE)
+            # 检查是否所有窗口都已关闭
+            while not exit_flag.empty():
+                closed_ip = exit_flag.get()
+                print(f"[✓] {closed_ip} 已关闭窗口")
+                ip_queues[closed_ip].put(b'__exit__')  # 向进程发送退出信号
+                ip_processes[closed_ip].join()  # 等待子进程退出
+                del ip_queues[closed_ip]
+                del ip_processes[closed_ip]
 
-    # **TODO: 丢包隐性恢复**
-    # 如果帧丢失，显示上一帧
-    if last_complete_frame:
-        display.blit(last_complete_frame, (0, 0))
+                # 添加暂停时间
+                paused_ips[closed_ip] = time.time() + PAUSE_DURATION
+                print(f"[!] 暂停接收来自 {closed_ip} 的数据 {PAUSE_DURATION} 秒")
 
-    # 更新 FPS
-    frame_rate += 1
-    if time.perf_counter() - start > 1:
-        fps_text = font.render("FPS: " + str(frame_rate), True, BLACK, WHITE)
-        frame_rate = 0
-        start = time.perf_counter()
-    display.blit(fps_text, textRect)
+            if not ip_processes:
+                print("所有窗口已关闭，退出主线程...")
+                break
 
-    pygame.display.update()
-    pygame.time.Clock().tick(60)
+    finally:
+        cv.destroyAllWindows()
 
-pygame.quit()
+if __name__ == '__main__':
+    dispatch_thread()
