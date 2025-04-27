@@ -26,11 +26,11 @@
 <div style="display: flex; justify-content: center; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
     <div>
         <h3 style="text-align: center; color: rgb(252, 146, 75);">发送端流程图</h3>
-        <img src="sender.png" alt="发送端流程图" width="300">
+        <img src="sender.png" alt="发送端流程图" width="600">
     </div>
     <div>
         <h3 style="text-align: center; color: rgb(252, 146, 75);">接收端流程图</h3>
-        <img src="receiver.png" alt="接收端流程图" width="300">
+        <img src="receiver.png" alt="接收端流程图" width="600">
     </div>
 </div>
 
