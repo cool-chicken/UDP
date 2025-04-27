@@ -52,7 +52,7 @@ python receiver.py
 ### 3. 运行效果
 在设置好收发端后我们可以看到如下效果
 
- <video src="demo.png" controls autoplay loop width="800"></video>
+ <img src="demo.png" alt="demo" width="400">
 
 可以发现，视频延迟度低，且画面流畅，适合实时应用。
 
