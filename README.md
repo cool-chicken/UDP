@@ -51,11 +51,15 @@ python receiver.py
 ```
 ### 3. 运行效果
 在设置好收发端后我们可以看到如下效果
+
  <video src="demo.png" controls autoplay loop width="800"></video>
+
 可以发现，视频延迟度低，且画面流畅，适合实时应用。
 
 接收端关闭接收窗口`q`，或者`esc`退出窗口，当所有窗口均关闭时候接收方主进程结束
+
  <img src="receiver_out.png" alt="接收端运行效果" width="400">
 
 发送端当收到5次RTT超时，发送端退出主进程，停止发送。
+
 <img src="timeout.png" alt="发送端超时退出" width="400">
